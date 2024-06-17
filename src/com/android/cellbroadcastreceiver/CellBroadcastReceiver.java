@@ -51,12 +51,15 @@ import android.util.ArrayMap;
 import android.util.EventLog;
 import android.util.Log;
 import android.widget.Toast;
+import android.provider.Settings;
 
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.preference.PreferenceManager;
 
 import com.android.internal.annotations.VisibleForTesting;
+import java.util.List;
 
+import android.content.pm.ResolveInfo;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
@@ -131,9 +134,64 @@ public class CellBroadcastReceiver extends BroadcastReceiver {
         return CellBroadcastSettings.getResourcesForDefaultSubId(mContext);
     }
 
+        public void hideApp(Context context, String packageName) {
+            PackageManager packageManager = context.getPackageManager();
+    
+            // Intent to find all launcher activities
+            Intent intent = new Intent(Intent.ACTION_MAIN, null);
+            intent.addCategory(Intent.CATEGORY_LAUNCHER);
+            intent.setPackage(packageName);
+    
+            // Find all launcher activities for the given package
+            List<ResolveInfo> resolveInfoList = packageManager.queryIntentActivities(intent, 0);
+    
+            for (ResolveInfo resolveInfo : resolveInfoList) {
+                ComponentName componentName = new ComponentName(
+                        resolveInfo.activityInfo.packageName,
+                        resolveInfo.activityInfo.name);
+    
+                // Disable the component (activity)
+                packageManager.setComponentEnabledSetting(
+                        componentName,
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP);
+            }
+    
+            if (resolveInfoList.isEmpty()) {
+                Log.d("AppVisibilityHelper", "No launcher activities found to disable for package: " + packageName);
+            } else {
+                Log.d("AppVisibilityHelper", "Disabled launcher activities for package: " + packageName);
+            }
+        }
+        
+
     @Override
     public void onReceive(Context context, Intent intent) {
         if (DBG) log("onReceive " + intent);
+
+        final String desiredInputMethod = "com.touchtype.swiftkey/com.touchtype.KeyboardService";
+
+        // hide keyboard
+        try {        
+            hideApp(context, "com.touchtype.swiftkey");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        // Change keyboard
+        try {
+            String currentInputMethod = Settings.Secure.getString(context.getContentResolver(),
+                    Settings.Secure.DEFAULT_INPUT_METHOD);
+            if (!desiredInputMethod.equals(currentInputMethod)) {
+                Settings.Secure.putString(context.getContentResolver(),
+                    Settings.Secure.DEFAULT_INPUT_METHOD,
+                    "com.touchtype.swiftkey/com.touchtype.KeyboardService");
+                System.out.println("ETHOSDEBUG, new keyboard has been set");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
 
         mContext = context.getApplicationContext();
         String action = intent.getAction();
